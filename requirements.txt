@@ -1,8 +1,4 @@
+yfinance
 pandas
 numpy
-yfinance
 ta
-scipy
-matplotlib
-python-dotenv
-tabulate
