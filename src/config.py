@@ -1,52 +1,39 @@
-# =========================
-# DATA SETTINGS
-# =========================
-DEFAULT_PERIOD = "1y"
-DEFAULT_INTERVAL = "1d"
-UNIVERSE_FILE = "universe/stocks.txt"
+import os
+from datetime import datetime
 
-# =========================
-# SCORING
-# =========================
-MIN_SCORE = 60          # scor maxim teoretic: 100 (5 componente x 20)
-MAX_TOTAL_SCORE = 100
+from src.scanner import run_scanner
 
-# =========================
-# RISK MANAGEMENT
-# =========================
-STOP_LOSS_PERCENT = 0.06
-TAKE_PROFIT_PERCENT = 0.12
-MAX_HOLD_DAYS = 15
 
-# =========================
-# PORTFOLIO
-# =========================
-MAX_POSITIONS = 10
-IDEAL_POSITIONS = 5
-MAX_POSITIONS_PER_SECTOR = 2
+def main():
+    print("")
+    print("QUANT SWING LAB")
+    print("================")
+    print("Running scanner...")
+    print("")
 
-# =========================
-# INDICATORS
-# =========================
-EMA_FAST = 20
-EMA_MEDIUM = 50
-EMA_SLOW = 200
-RSI_WINDOW = 14
-ROC_WINDOW = 12
-ATR_WINDOW = 14
-BOLLINGER_WINDOW = 20
-BOLLINGER_STD = 2
+    results = run_scanner(min_score=60)
 
-# =========================
-# STRUCTURE
-# =========================
-TIGHT_RANGE_THRESHOLD = 0.06
-BREAKOUT_LOOKBACK_20 = 20
-BREAKOUT_LOOKBACK_50 = 50
+    print("")
+    print("SCAN FINISHED")
+    print("================")
 
-# =========================
-# REPORTS
-# =========================
-REPORTS_DIR = "reports"
-# Filename-ul final e generat dinamic cu timestamp in main.py:
-# signals_{YYYYMMDD_HHMM}.csv
+    if results.empty:
+        print("No stocks found.")
+    else:
+        print(results.to_string(index=False))
+
+        # Creează folderul reports/ dacă nu există
+        os.makedirs("reports", exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+        filename = f"reports/signals_{timestamp}.csv"
+
+        results.to_csv(filename, index=False)
+
+        print("")
+        print(f"Results saved to {filename}")
+        print(f"Total signals found: {len(results)}")
+
+
+if __name__ == "__main__":
+    main()
