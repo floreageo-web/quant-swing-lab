@@ -1,52 +1,79 @@
 import pandas as pd
 
-from src.data_loader import download_universe_data
+from src.data_loader import download_universe_data, download_benchmark
 from src.indicators import add_indicators
 from src.scoring import calculate_total_score
-from src.market_regime import analyze_market_regime
 from src.config import MIN_SCORE
+
+
+def safe_int(value):
+    try:
+        if pd.isna(value):
+            return 0
+        return int(value)
+    except Exception:
+        return 0
 
 
 def run_scanner(min_score=MIN_SCORE):
     """
-    Rulează scannerul principal.
-    Returnează DataFrame sortat descrescător după total_score,
-    filtrând doar acțiunile cu scor >= min_score.
+    Rulează scannerul principal cu strategia de retest.
     """
+    spy_data = download_benchmark()
+    if spy_data is not None and not spy_data.empty:
+        try:
+            spy_data = add_indicators(spy_data)
+        except Exception as error:
+            print(f"[Scanner] Benchmark indicator error: {error}")
+            spy_data = None
+
     all_data = download_universe_data()
-    results = []
+    results  = []
 
     for ticker, data in all_data.items():
         try:
-            # Indicatori
-            data = add_indicators(data)
+            data       = add_indicators(data)
+            score_data = calculate_total_score(
+                data=data,
+                spy_data=spy_data,
+            )
 
-            # Scoring
-            score_data = calculate_total_score(data)
+            if score_data["eliminated"]:
+                print(
+                    f"[Scanner] Skipping {ticker}: "
+                    f"{score_data.get('elimination_reason', 'eliminated')}"
+                )
+                continue
 
-            # Market Regime
-            regime_data = analyze_market_regime(data)
+            if score_data["total_score"] < min_score:
+                continue
 
             latest = data.iloc[-1]
 
             result = {
-                "ticker":            ticker,
-                "close":             round(latest["Close"], 2),
-                "volume":            int(latest["Volume"]),
-                "rsi":               round(latest["RSI"], 1) if "RSI" in data.columns else None,
-                "total_score":       score_data["total_score"],
-                "trend_score":       score_data["trend_score"],
-                "momentum_score":    score_data["momentum_score"],
-                "compression_score": score_data["compression_score"],
-                "volume_score":      score_data["volume_score"],
-                "structure_score":   score_data["structure_score"],
-                "z_score":           round(regime_data["z_score"], 2) if regime_data["z_score"] is not None else None,
-                "mean_reversion":    regime_data["mean_reversion_context"],
-                "low_volatility":    regime_data["low_volatility_regime"],
+                "ticker":             ticker,
+                "close":              round(latest["Close"], 2),
+                "volume":             safe_int(latest["Volume"]),
+                "rsi":                round(latest["RSI"], 1),
+                "atr_pct":            round(latest["ATR_PCT"], 2),
+                "z_score":            round(score_data["z_score"], 2) if score_data["z_score"] is not None else None,
+                "total_score":        score_data["total_score"],
+                "graph_score":        score_data["graph_score"],
+                "statistic_score":    score_data["statistic_score"],
+                "market_penalty":     score_data["market_penalty"],
+                "ema_retest_level":   score_data["ema_retest_level"],
+                "ema_retest_score":   score_data["ema_retest_score"],
+                "rsi_score":          score_data["rsi_score"],
+                "volume_dryup_score": score_data["volume_dryup_score"],
+                "fibonacci_score":    score_data["fibonacci_score"],
+                "candle_score":       score_data["candle_score"],
+                "trend_score":        score_data["trend_score"],
+                "higher_lows_score":  score_data["higher_lows_score"],
+                "zscore_score":       score_data["zscore_score"],
+                "rs_score":           score_data["rs_score"],
             }
 
-            if result["total_score"] >= min_score:
-                results.append(result)
+            results.append(result)
 
         except Exception as error:
             print(f"[Scanner] Error for {ticker}: {error}")
@@ -54,9 +81,10 @@ def run_scanner(min_score=MIN_SCORE):
     results_df = pd.DataFrame(results)
 
     if not results_df.empty:
-        results_df = results_df.sort_values(
-            by="total_score",
-            ascending=False
-        ).reset_index(drop=True)
+        results_df = (
+            results_df
+            .sort_values(by="total_score", ascending=False)
+            .reset_index(drop=True)
+        )
 
     return results_df
