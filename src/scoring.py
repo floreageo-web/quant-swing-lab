@@ -155,7 +155,7 @@ def calculate_total_score(data, spy_data=None):
 
     graph_score     = graph["graph_score"]
     statistic_score = stat["statistic_score"]
-    total_score     = graph_score + statistic_score + penalty
+    total_score     = max(0, graph_score + statistic_score + penalty)
 
     return {
         "total_score":        total_score,
