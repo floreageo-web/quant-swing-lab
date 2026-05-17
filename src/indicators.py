@@ -3,6 +3,18 @@ from ta.momentum import ROCIndicator
 from ta.volatility import AverageTrueRange
 from ta.volatility import BollingerBands
 
+from src.config import (
+    EMA_FAST,
+    EMA_MEDIUM,
+    EMA_SLOW,
+    EMA_TREND,
+    RSI_WINDOW,
+    ROC_WINDOW,
+    ATR_WINDOW,
+    BOLLINGER_WINDOW,
+    BOLLINGER_STD,
+)
+
 
 def add_indicators(data):
     required = {"Open", "High", "Low", "Close", "Volume"}
@@ -13,34 +25,17 @@ def add_indicators(data):
     data = data.copy()
 
     # EMA
-    data["EMA20"] = (
-        data["Close"]
-        .ewm(span=20, adjust=False)
-        .mean()
-    )
-    data["EMA50"] = (
-        data["Close"]
-        .ewm(span=50, adjust=False)
-        .mean()
-    )
-    data["EMA200"] = (
-        data["Close"]
-        .ewm(span=200, adjust=False)
-        .mean()
-    )
+    data["EMA20"]  = data["Close"].ewm(span=EMA_FAST,   adjust=False).mean()
+    data["EMA50"]  = data["Close"].ewm(span=EMA_MEDIUM, adjust=False).mean()
+    data["EMA100"] = data["Close"].ewm(span=EMA_SLOW,   adjust=False).mean()
+    data["EMA200"] = data["Close"].ewm(span=EMA_TREND,  adjust=False).mean()
 
     # RSI
-    rsi = RSIIndicator(
-        close=data["Close"],
-        window=14
-    )
+    rsi = RSIIndicator(close=data["Close"], window=RSI_WINDOW)
     data["RSI"] = rsi.rsi()
 
     # ROC
-    roc = ROCIndicator(
-        close=data["Close"],
-        window=12
-    )
+    roc = ROCIndicator(close=data["Close"], window=ROC_WINDOW)
     data["ROC"] = roc.roc()
 
     # ATR
@@ -48,22 +43,29 @@ def add_indicators(data):
         high=data["High"],
         low=data["Low"],
         close=data["Close"],
-        window=14
+        window=ATR_WINDOW,
     )
-    data["ATR"] = atr.average_true_range()
+    data["ATR"]     = atr.average_true_range()
+    data["ATR_PCT"] = (data["ATR"] / data["Close"]) * 100
 
     # Bollinger Width
     bb = BollingerBands(
         close=data["Close"],
-        window=20,
-        window_dev=2
+        window=BOLLINGER_WINDOW,
+        window_dev=BOLLINGER_STD,
     )
     data["BB_WIDTH"] = bb.bollinger_wband()
 
-    # Relative Volume — fillna(0) pentru primele 20 bare unde rolling e NaN
+    # Relative Volume
     data["REL_VOLUME"] = (
-        data["Volume"] /
-        data["Volume"].rolling(20).mean()
+        data["Volume"] / data["Volume"].rolling(20).mean()
     ).fillna(0)
+
+    # MA20 + STD20 pentru Z-Score
+    data["MA20"]    = data["Close"].rolling(20).mean()
+    data["STD20"]   = data["Close"].rolling(20).std()
+
+    # Z-Score calculat direct aici
+    data["Z_SCORE"] = (data["Close"] - data["MA20"]) / data["STD20"]
 
     return data
