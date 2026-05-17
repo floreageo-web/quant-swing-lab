@@ -1,19 +1,18 @@
+import time
+import pandas as pd
 import yfinance as yf
 
 from src.config import (
     UNIVERSE_FILE,
     DEFAULT_PERIOD,
     DEFAULT_INTERVAL,
+    BENCHMARK_TICKER,
 )
 
-MIN_BARS_REQUIRED = 200  # necesar pentru EMA200 și indicatori pe termen lung
+MIN_BARS_REQUIRED = 250
 
 
 def load_universe(file_path=UNIVERSE_FILE):
-    """
-    Citește lista de ticker-e din universe/stocks.txt.
-    Returnează listă goală dacă fișierul nu există.
-    """
     try:
         with open(file_path, "r") as file:
             tickers = [
@@ -32,10 +31,6 @@ def download_price_data(
     period=DEFAULT_PERIOD,
     interval=DEFAULT_INTERVAL,
 ):
-    """
-    Descarcă date bursiere pentru un ticker via yfinance.
-    Returnează DataFrame gol dacă descărcarea eșuează.
-    """
     data = yf.download(
         ticker,
         period=period,
@@ -43,14 +38,34 @@ def download_price_data(
         auto_adjust=True,
         progress=False,
     )
+
+    if isinstance(data.columns, pd.MultiIndex):
+        data.columns = data.columns.get_level_values(0)
+
     return data
 
 
+def download_benchmark(period=DEFAULT_PERIOD, interval=DEFAULT_INTERVAL):
+    """
+    Descarcă datele pentru SPY ca benchmark.
+    """
+    print(f"[DataLoader] Downloading benchmark {BENCHMARK_TICKER}...")
+    try:
+        data = download_price_data(BENCHMARK_TICKER, period, interval)
+        if data.empty:
+            print(f"[DataLoader] Benchmark {BENCHMARK_TICKER} returned empty data.")
+            return None
+
+        # Adaugă EMA200 pentru market regime filter
+        data["EMA200"] = data["Close"].ewm(span=200, adjust=False).mean()
+        return data
+
+    except Exception as error:
+        print(f"[DataLoader] Error downloading benchmark: {error}")
+        return None
+
+
 def download_universe_data():
-    """
-    Descarcă date pentru toți ticker-ii din universe.
-    Filtrează ticker-ii cu date insuficiente (< MIN_BARS_REQUIRED bare).
-    """
     tickers = load_universe()
 
     if not tickers:
@@ -58,7 +73,7 @@ def download_universe_data():
         return {}
 
     all_data = {}
-    skipped = []
+    skipped  = []
 
     for ticker in tickers:
         print(f"[DataLoader] Downloading {ticker}...")
@@ -78,6 +93,8 @@ def download_universe_data():
         except Exception as error:
             print(f"[DataLoader] Error for {ticker}: {error}")
             skipped.append((ticker, str(error)))
+
+        time.sleep(2)
 
     if skipped:
         print(f"\n[DataLoader] Skipped {len(skipped)} tickers:")
